@@ -35,6 +35,9 @@ class LunarCalendar extends StatefulWidget {
 
   final bool enableDrag;
 
+  /// Callback khi tháng được thay đổi
+  final Function(DateTime)? onMonthChanged;
+
   const LunarCalendar({
     super.key,
     this.theme,
@@ -47,6 +50,7 @@ class LunarCalendar extends StatefulWidget {
     this.initialSolarDate,
     this.initialLunarDate,
     this.enableDrag = true,
+    this.onMonthChanged,
   });
 
   @override
@@ -56,6 +60,7 @@ class LunarCalendar extends StatefulWidget {
 class _LunarCalendarState extends State<LunarCalendar> {
   late DateTime _selectedDate;
   late DateTime _displayedMonth;
+  late DateTime _baseMonth;
   late CalendarView _currentView;
   late PageController _pageController;
   static const _initialPage = 1200;
@@ -85,10 +90,13 @@ class _LunarCalendarState extends State<LunarCalendar> {
     _displayedMonth = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _currentView = CalendarView.month;
 
-    // Tính toán trang ban đầu dựa trên sự chênh lệch tháng
+    // Xác định tháng gốc để cố định ánh xạ trang <-> tháng
     final now = DateTime.now();
-    final monthDiff = (_displayedMonth.year - now.year) * 12 +
-        (_displayedMonth.month - now.month);
+    _baseMonth = DateTime(now.year, now.month, 1);
+
+    // Tính toán trang ban đầu dựa trên sự chênh lệch tháng so với _baseMonth
+    final monthDiff = (_displayedMonth.year - _baseMonth.year) * 12 +
+        (_displayedMonth.month - _baseMonth.month);
     _pageController = PageController(initialPage: _initialPage + monthDiff);
   }
 
@@ -101,8 +109,9 @@ class _LunarCalendarState extends State<LunarCalendar> {
   DateTime _getMonthForPage(int page) {
     final monthDiff = page - _initialPage;
     return DateTime(
-      DateTime.now().year,
-      DateTime.now().month + monthDiff,
+      _baseMonth.year,
+      _baseMonth.month + monthDiff,
+      1,
     );
   }
 
@@ -142,9 +151,9 @@ class _LunarCalendarState extends State<LunarCalendar> {
       final heightOfCell = (theme.fontSize + theme.subtextFontSize) * 1.5 + 16;
       final displayedMonth = _displayedMonth;
       final days = DateUtils.daysInMonth(displayedMonth);
-
-      final numberOfRows = days.length ~/ 7;
-      final calendarHeight = numberOfRows * heightOfCell;
+      // Cố định chiều cao lịch theo 6 hàng để tránh giật khi chuyển trang
+      const weeksPerMonth = 6;
+      final calendarHeight = weeksPerMonth * heightOfCell;
 
       return Material(
         color: theme.backgroundColor,
@@ -160,11 +169,11 @@ class _LunarCalendarState extends State<LunarCalendar> {
               maxWidth: maxWidth,
               showTodayButton: widget.showTodayButton,
               onMonthChanged: (date) {
-                final monthDiff = (date.year - _displayedMonth.year) * 12 +
-                    date.month -
-                    _displayedMonth.month;
+                // Điều hướng theo chênh lệch tháng so với _baseMonth để đảm bảo ổn định
+                final targetDiff = (date.year - _baseMonth.year) * 12 +
+                    (date.month - _baseMonth.month);
                 _pageController.animateToPage(
-                  _pageController.page!.round() + monthDiff,
+                  _initialPage + targetDiff,
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut,
                 );
@@ -176,11 +185,13 @@ class _LunarCalendarState extends State<LunarCalendar> {
                 final now = DateTime.now();
                 setState(() {
                   _selectedDate = now;
-                  _displayedMonth = now;
+                  _displayedMonth = DateTime(now.year, now.month, 1);
                 });
 
                 widget.onDateSelected?.call(now, LunarUtils.solarToLunar(now));
-                _pageController.jumpToPage(_initialPage);
+                final targetDiff = (now.year - _baseMonth.year) * 12 +
+                    (now.month - _baseMonth.month);
+                _pageController.jumpToPage(_initialPage + targetDiff);
               },
             ),
             if (widget.enableDrag)
@@ -241,9 +252,11 @@ class _LunarCalendarState extends State<LunarCalendar> {
           setState(() {
             _displayedMonth = _getMonthForPage(page);
           });
+          widget.onMonthChanged?.call(_displayedMonth);
         },
         itemBuilder: (context, page) {
           final month = _getMonthForPage(page);
+          widget.onMonthChanged?.call(month);
           return _buildMonthView(
             theme,
             localization,

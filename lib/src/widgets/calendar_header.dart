@@ -176,7 +176,7 @@ class CalendarHeader extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: YearPicker(
               firstDate: DateTime(1900),
-              lastDate: DateTime(2100),
+              lastDate: DateTime(DateTime.now().year + 100),
               selectedDate: displayedMonth,
               onChanged: (date) {
                 Navigator.pop(context);
